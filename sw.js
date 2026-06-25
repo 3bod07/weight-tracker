@@ -1,5 +1,5 @@
 /* Offline cache for متتبع الوزن */
-const CACHE = "wt-cache-v8";
+const CACHE = "wt-cache-v9";
 const ASSETS = [
   "./",
   "./index.html",
