@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>متتبع الوزن</title>
+
+<!-- PWA -->
+<meta name="theme-color" content="#05060a" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="الوزن" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --bg:#05060a; --bg2:#0a0e1a; --ink:#eef2ff; --muted:#8a93b2;
+    --glass:rgba(255,255,255,.06); --glass-2:rgba(255,255,255,.04);
+    --stroke:rgba(255,255,255,.10); --stroke-strong:rgba(255,255,255,.18);
+    --accent:#7c9cff; --accent-2:#56e1c7; --glow:rgba(124,156,255,.35);
+    --danger:#ff8492;
+    --radius:26px;
+    --safe-top:env(safe-area-inset-top, 0px);
+    --safe-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%;}
+  body{
+    font-family:"IBM Plex Sans Arabic", system-ui, -apple-system, sans-serif;
+    color:var(--ink); background:var(--bg); min-height:100dvh; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .bg-orbs{position:fixed; inset:0; z-index:-2; overflow:hidden; background:
+      radial-gradient(120% 80% at 100% 0%, #0c1230 0%, transparent 55%),
+      radial-gradient(120% 80% at 0% 100%, #0a1426 0%, transparent 55%),
+      linear-gradient(180deg, #05060a, #04050b);}
+  .orb{position:absolute; border-radius:50%; filter:blur(60px); opacity:.55;}
+  .orb.a{width:60vw; height:60vw; top:-15vw; right:-15vw; background:radial-gradient(circle, #3552ff, transparent 70%);}
+  .orb.b{width:55vw; height:55vw; bottom:-20vw; left:-20vw; background:radial-gradient(circle, #11a98e, transparent 70%); opacity:.40;}
+  .grain{position:fixed; inset:0; z-index:-1; opacity:.04; pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  .app{
+    max-width:480px; margin:0 auto;
+    padding:calc(var(--safe-top) + 22px) 18px calc(var(--safe-bottom) + 104px);
+    display:flex; flex-direction:column; gap:18px;
+  }
+
+  .glass{
+    background:linear-gradient(160deg, var(--glass), var(--glass-2));
+    border:1px solid var(--stroke); border-radius:var(--radius);
+    backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10);
+  }
+
+  header{display:flex; align-items:center; justify-content:space-between; padding:2px 4px;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .mark{width:42px; height:42px; border-radius:14px; display:grid; place-items:center;
+    background:linear-gradient(160deg, rgba(124,156,255,.9), rgba(86,225,199,.7));
+    box-shadow:0 8px 24px var(--glow), inset 0 1px 0 rgba(255,255,255,.5);}
+  .brand .mark svg{width:22px; height:22px;}
+  .brand h1{font-size:19px; font-weight:600; margin:0; letter-spacing:.2px;}
+  .brand p{margin:1px 0 0; font-size:12px; color:var(--muted); font-weight:400;}
+  .icon-btn{width:42px; height:42px; border-radius:14px; border:1px solid var(--stroke);
+    background:var(--glass); color:var(--ink); display:grid; place-items:center;
+    backdrop-filter:blur(12px); cursor:pointer; transition:.2s;}
+  .icon-btn:active{transform:scale(.92); background:var(--glass-2);}
+  .icon-btn svg{width:20px; height:20px;}
+
+  /* views */
+  .view{display:none; flex-direction:column; gap:18px;}
+  .view.active{display:flex; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+
+  /* hero / BMI */
+  .hero{padding:22px; display:flex; flex-direction:column; gap:18px; position:relative; overflow:hidden;}
+  .hero .ring-row{display:flex; align-items:center; gap:20px;}
+  .ring{position:relative; width:118px; height:118px; flex:0 0 auto;}
+  .ring svg{transform:rotate(-90deg) scaleX(-1);}
+  .ring .center{position:absolute; inset:0; display:grid; place-items:center; text-align:center;}
+  .ring .center .big{font-size:30px; font-weight:700; line-height:1;}
+  .ring .center .lbl{font-size:11px; color:var(--muted); margin-top:4px;}
+  .hero .meta{flex:1; min-width:0;}
+  .hero .meta .cat{font-size:20px; font-weight:600; margin:0 0 6px;}
+  .hero .meta .desc{font-size:13px; color:var(--muted); line-height:1.6; margin:0;}
+  .chips{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  .chip{font-size:12px; padding:7px 12px; border-radius:999px; border:1px solid var(--stroke);
+    background:var(--glass-2); color:var(--muted); display:flex; gap:6px; align-items:center;}
+  .chip b{color:var(--ink); font-weight:600;}
+
+  .sec-title{display:flex; align-items:center; justify-content:space-between; padding:0 6px; margin-top:4px;}
+  .sec-title h2{font-size:15px; font-weight:600; margin:0;}
+  .sec-title span{font-size:12px; color:var(--muted);}
+
+  /* editor */
+  .editor{
+    padding:20px; display:flex; flex-direction:column; gap:18px;
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgba(124,156,255,.16), transparent 60%),
+      radial-gradient(120% 90% at 0% 100%, rgba(86,225,199,.12), transparent 60%),
+      linear-gradient(160deg, var(--glass), var(--glass-2));
+    border-color:rgba(124,156,255,.22);
+    box-shadow:0 18px 50px rgba(0,0,0,.45), 0 0 40px rgba(124,156,255,.08), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .date-nav{display:flex; align-items:center; gap:10px;}
+  .date-nav .nav{width:44px; height:44px; flex:0 0 auto; border-radius:14px; border:1px solid var(--stroke);
+    background:var(--glass-2); color:var(--ink); display:grid; place-items:center; cursor:pointer; transition:.15s;}
+  .date-nav .nav:active{transform:scale(.9);}
+  .date-nav .nav:disabled{opacity:.3; cursor:default;}
+  .date-field{flex:1; position:relative;}
+  .date-field label{position:absolute; top:9px; right:16px; font-size:11px; color:var(--muted); pointer-events:none;}
+  .date-display{width:100%; height:60px; border-radius:16px; border:1px solid var(--stroke);
+    background:var(--glass-2); color:var(--ink); font-family:inherit; font-size:16px; font-weight:600;
+    padding:22px 16px 8px; text-align:center;}
+  .date-field input[type=date]{position:absolute; inset:0; opacity:0; width:100%; height:100%; border:0; cursor:pointer;}
+  .date-field .cal-ic{position:absolute; left:14px; top:50%; transform:translateY(-50%); width:18px; height:18px; color:var(--accent-2); opacity:.85; pointer-events:none;}
+  .today-tag{font-size:11px; color:var(--accent-2); font-weight:600;}
+
+  .weight-input{display:flex; align-items:center; justify-content:center; gap:16px;}
+  .stepper{width:56px; height:56px; border-radius:50%; border:1px solid var(--stroke-strong);
+    background:var(--glass); color:var(--ink); font-size:26px; font-weight:300; cursor:pointer;
+    display:grid; place-items:center; transition:.15s; line-height:1;}
+  .stepper:active{transform:scale(.9); background:var(--accent); color:#04060f; border-color:transparent;}
+  .wfield{display:flex; flex-direction:column; align-items:center; min-width:150px;}
+  .wfield input{width:160px; background:transparent; border:0; color:var(--ink);
+    font-family:inherit; font-size:54px; font-weight:700; text-align:center; padding:0; letter-spacing:-1px;}
+  .wfield input:focus{outline:none;}
+  .wfield .unit{font-size:13px; color:var(--muted); margin-top:-2px;}
+  .wfield input::-webkit-outer-spin-button,.wfield input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+
+  .save-bar{display:flex; align-items:center; justify-content:center; gap:8px; min-height:22px; font-size:13px; color:var(--muted); transition:.3s;}
+  .save-bar.saved{color:var(--accent-2);}
+  .save-bar.saved svg{opacity:1;}
+  .save-bar svg{width:16px; height:16px; opacity:0; transition:.3s;}
+  .delete-day{align-self:center; font-size:12px; color:var(--danger); background:transparent; border:0; cursor:pointer; padding:4px 10px; opacity:.85;}
+
+  /* chart */
+  .chart-card{padding:20px 14px 14px;}
+  .chart-wrap{position:relative; width:100%; height:150px;}
+  .chart-wrap svg{width:100%; height:100%; overflow:visible;}
+  .chart-empty{height:150px; display:grid; place-items:center; color:var(--muted); font-size:13px; text-align:center;}
+
+  /* history */
+  .history{display:flex; flex-direction:column; gap:10px;}
+  .row{padding:15px 18px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:.15s;}
+  .row:active{transform:scale(.985);}
+  .row .dot{width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--glow); flex:0 0 auto;}
+  .row .r-date{flex:1; min-width:0;}
+  .row .r-date .d{font-size:15px; font-weight:500;}
+  .row .r-date .sub{font-size:11px; color:var(--muted); margin-top:2px;}
+  .row .r-val{font-size:18px; font-weight:700;}
+  .row .r-val small{font-size:11px; color:var(--muted); font-weight:400; margin-right:3px;}
+  .row .r-diff{font-size:12px; min-width:54px; text-align:left; font-weight:600;}
+  .r-diff.up{color:var(--danger);} .r-diff.down{color:var(--accent-2);} .r-diff.flat{color:var(--muted);}
+  .empty{padding:34px 20px; text-align:center; color:var(--muted); font-size:13px; line-height:1.7;}
+
+  /* calendar */
+  .cal-card{padding:18px 16px;}
+  .cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+  .cal-head .m{font-size:17px; font-weight:600;}
+  .cal-head .nav{width:40px; height:40px; border-radius:13px; border:1px solid var(--stroke);
+    background:var(--glass-2); color:var(--ink); display:grid; place-items:center; cursor:pointer; transition:.15s;}
+  .cal-head .nav:active{transform:scale(.9);}
+  .cal-head .nav:disabled{opacity:.3; cursor:default;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:7px;}
+  .cal-wd{text-align:center; font-size:11px; color:var(--muted); padding-bottom:2px; font-weight:500;}
+  .cal-cell{position:relative; aspect-ratio:1/1.08; border-radius:14px; border:1px solid var(--stroke);
+    background:var(--glass-2); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:1px; cursor:pointer; transition:.12s; padding:2px;}
+  .cal-cell .num{font-size:13px; font-weight:500; color:var(--ink);}
+  .cal-cell .w{font-size:9.5px; color:var(--accent-2); font-weight:700; line-height:1;}
+  .cal-cell.pad{background:transparent; border:0; cursor:default;}
+  .cal-cell.has{background:linear-gradient(160deg, rgba(124,156,255,.24), rgba(86,225,199,.10)); border-color:rgba(124,156,255,.45);}
+  .cal-cell.today{box-shadow:0 0 0 2px var(--accent-2) inset;}
+  .cal-cell.today .num{color:var(--accent-2); font-weight:700;}
+  .cal-cell.future{opacity:.25; cursor:default;}
+  .cal-cell:active:not(.future):not(.pad){transform:scale(.9);}
+
+  .cal-legend{display:flex; gap:16px; justify-content:center; margin-top:14px; font-size:11px; color:var(--muted);}
+  .cal-legend i{display:inline-block; width:10px; height:10px; border-radius:4px; margin-left:5px; vertical-align:middle;}
+
+  /* stats */
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .stat{padding:16px 16px;}
+  .stat .v{font-size:23px; font-weight:700; line-height:1;}
+  .stat .v small{font-size:11px; font-weight:500; color:var(--muted); margin-right:3px;}
+  .stat .k{font-size:12px; color:var(--muted); margin-top:7px;}
+  .goal-card{padding:20px; display:flex; flex-direction:column; gap:14px;}
+  .goal-top{display:flex; align-items:flex-end; justify-content:space-between;}
+  .goal-top .v{font-size:26px; font-weight:700;}
+  .goal-top .v small{font-size:12px; color:var(--muted); font-weight:500;}
+  .goal-top .g{font-size:13px; color:var(--muted); text-align:left;}
+  .bar{height:12px; border-radius:999px; background:var(--glass-2); overflow:hidden; border:1px solid var(--stroke);}
+  .bar > i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, var(--accent), var(--accent-2)); transition:width .5s ease; box-shadow:0 0 14px var(--glow);}
+  .goal-note{font-size:12px; color:var(--muted); text-align:center;}
+
+  .scale{padding:18px 16px;}
+  .scale h3{margin:0 0 14px; font-size:14px; font-weight:600;}
+  .scale-bar{display:flex; height:10px; border-radius:999px; overflow:hidden; margin-bottom:6px;}
+  .scale-bar i{flex:1;}
+  .scale-marks{position:relative; height:18px; font-size:9px; color:var(--muted);}
+  .scale-pointer{position:relative; height:0;}
+  .scale-pointer .p{position:absolute; top:-2px; width:0; height:0; transform:translateX(50%);
+    border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:8px solid var(--ink);}
+
+  /* calories calculator */
+  .calc-grid2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;}
+  .seg{display:flex; gap:6px; padding:5px; border-radius:16px; border:1px solid var(--stroke); background:var(--glass-2);}
+  .seg button{flex:1; height:46px; border:0; border-radius:12px; background:transparent; color:var(--muted);
+    font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; transition:.18s;}
+  .seg button.active{background:linear-gradient(160deg, var(--accent), #5b78ff); color:#04060f; box-shadow:0 6px 18px var(--glow);}
+  .select{width:100%; min-width:0; height:56px; border-radius:16px; border:1px solid var(--stroke); background:var(--glass-2);
+    color:var(--ink); font-family:inherit; font-size:15px; font-weight:500; padding:0 16px 0 40px; cursor:pointer;
+    direction:rtl; text-align:right; appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a93b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:left 16px center;}
+  .select:focus{outline:none; border-color:var(--accent);}
+  .select option{background:#0a0e1a; color:var(--ink);}
+  .tdee-card{padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center;
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgba(124,156,255,.16), transparent 60%),
+      radial-gradient(120% 90% at 0% 100%, rgba(86,225,199,.12), transparent 60%),
+      linear-gradient(160deg, var(--glass), var(--glass-2));
+    border-color:rgba(124,156,255,.22);}
+  .tdee-big{font-size:46px; font-weight:700; line-height:1;
+    background:linear-gradient(160deg,#9db4ff,#56e1c7); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  .tdee-unit{font-size:13px; color:var(--muted);}
+  .tdee-sub{font-size:12px; color:var(--muted); margin-top:8px;}
+  /* intake logger */
+  .intake-card{padding:20px; display:flex; flex-direction:column; gap:16px;
+    background:
+      radial-gradient(120% 90% at 100% 0%, rgba(86,225,199,.16), transparent 60%),
+      radial-gradient(120% 90% at 0% 100%, rgba(124,156,255,.12), transparent 60%),
+      linear-gradient(160deg, var(--glass), var(--glass-2));
+    border-color:rgba(86,225,199,.22);
+    box-shadow:0 18px 50px rgba(0,0,0,.45), 0 0 40px rgba(86,225,199,.08), inset 0 1px 0 rgba(255,255,255,.12);}
+  .intake-info{display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--muted);}
+  .intake-info b{color:var(--ink); font-weight:600;}
+  .intake-remain{color:var(--accent-2); font-weight:600;}
+  .intake-remain.over{color:var(--danger);}
+  /* cumulative intake total + add-meal */
+  .intake-total{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .intake-total .big{font-size:58px; font-weight:700; letter-spacing:-1px; line-height:1;
+    background:linear-gradient(160deg,#9db4ff,#56e1c7); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  .intake-total .unit{font-size:13px; color:var(--muted); margin-top:3px;}
+  .meal-add{display:flex; gap:10px;}
+  .meal-add input{flex:1; min-width:0; height:56px; border-radius:16px; border:1px solid var(--stroke); background:var(--glass-2);
+    color:var(--ink); font-family:inherit; font-size:18px; font-weight:600; text-align:center; padding:0 14px;
+    appearance:textfield; -moz-appearance:textfield;}
+  .meal-add input::-webkit-outer-spin-button,.meal-add input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .meal-add input::placeholder{font-size:14px; font-weight:500;}
+  .meal-add input:focus{outline:none; border-color:var(--accent-2);}
+  .meal-add button{flex:0 0 auto; min-width:78px; height:56px; border-radius:16px; border:0; cursor:pointer;
+    background:linear-gradient(160deg, var(--accent-2), #3fcfb4); color:#04060f; font-family:inherit; font-size:15px; font-weight:700;
+    display:grid; place-items:center; transition:.15s; box-shadow:0 8px 22px rgba(86,225,199,.25);}
+  .meal-add button:active{transform:scale(.93);}
+  .meal-list-label{font-size:12px; color:var(--muted); margin-bottom:8px;}
+  .meal-list{display:flex; flex-wrap:wrap; gap:8px;}
+  .meal-chip{display:flex; align-items:center; gap:9px; padding:8px 8px 8px 13px; border-radius:999px;
+    border:1px solid var(--stroke); background:var(--glass-2); font-size:14px; font-weight:600;}
+  .meal-chip .x{width:21px; height:21px; border-radius:50%; border:0; cursor:pointer; display:grid; place-items:center;
+    background:rgba(255,132,146,.16); color:var(--danger); font-size:13px; line-height:1; padding:0; font-family:inherit;}
+  .meal-chip .x:active{transform:scale(.9);}
+  .stat .v.lose{color:var(--accent-2);} .stat .v.gain{color:var(--danger);}
+
+  /* modal / sheets */
+  .scrim{position:fixed; inset:0; z-index:50; background:rgba(2,3,8,.55); backdrop-filter:blur(8px);
+    display:flex; align-items:flex-end; justify-content:center; padding:18px;
+    opacity:0; pointer-events:none; transition:.25s;}
+  .scrim.open{opacity:1; pointer-events:auto;}
+  .sheet{width:100%; max-width:480px; padding:24px 22px calc(var(--safe-bottom) + 24px);
+    transform:translateY(20px); transition:.28s cubic-bezier(.2,.9,.3,1); display:flex; flex-direction:column; gap:18px;}
+  .scrim.open .sheet{transform:translateY(0);}
+  .sheet h3{margin:0; font-size:18px; font-weight:600;}
+  .sheet p.hint{margin:0; font-size:13px; color:var(--muted); line-height:1.6;}
+  .field{display:flex; flex-direction:column; gap:8px;}
+  .field label{font-size:13px; color:var(--muted);}
+  .field input{width:100%; min-width:0; height:56px; border-radius:16px; border:1px solid var(--stroke); background:var(--glass-2);
+    color:var(--ink); font-family:inherit; font-size:18px; font-weight:600; text-align:right; padding:0 16px; direction:rtl;
+    appearance:textfield; -moz-appearance:textfield;}
+  .field input::-webkit-outer-spin-button,.field input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+  .field input::placeholder{text-align:right;}
+  .field input:focus{outline:none; border-color:var(--accent);}
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:4px 2px;}
+  .toggle-row .t-title{font-size:15px; font-weight:600;}
+  .toggle-row .t-sub{font-size:12px; color:var(--muted); margin-top:3px;}
+  .switch{width:52px; height:31px; border-radius:999px; border:1px solid var(--stroke); background:var(--glass-2);
+    position:relative; cursor:pointer; flex:0 0 auto; transition:.22s; padding:0;}
+  .switch span{position:absolute; top:3px; right:3px; width:25px; height:25px; border-radius:50%;
+    background:#cfd6f0; transition:.22s; box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  .switch.on{background:linear-gradient(160deg, var(--accent), var(--accent-2)); border-color:transparent;}
+  .switch.on span{right:24px; background:#fff;}
+  .btn{height:54px; border-radius:16px; border:0; cursor:pointer; font-family:inherit; font-size:16px; font-weight:600;
+    background:linear-gradient(160deg, var(--accent), #5b78ff); color:#04060f; box-shadow:0 10px 30px var(--glow); transition:.15s;}
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{background:var(--glass); color:var(--ink); border:1px solid var(--stroke); box-shadow:none;}
+  .row-2{display:flex; gap:10px;} .row-2 .btn{flex:1;}
+  .link-btn{font-size:13px; color:var(--accent); background:transparent; border:0; cursor:pointer; padding:6px; text-align:right;}
+  .danger-link{font-size:12px; color:var(--danger); background:transparent; border:0; cursor:pointer; padding:4px; align-self:flex-start;}
+  .divider{height:1px; background:var(--stroke); margin:2px 0;}
+
+  /* quick log sheet weight */
+  .ql-weight{display:flex; align-items:center; justify-content:center; gap:16px;}
+  .ql-weight input{width:130px; background:transparent; border:0; color:var(--ink);
+    font-family:inherit; font-size:46px; font-weight:700; text-align:center; padding:0;}
+  .ql-weight input:focus{outline:none;}
+  .ql-weight input::-webkit-outer-spin-button,.ql-weight input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+
+  /* tabbar */
+  .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:40; display:flex; justify-content:center;
+    padding:8px 16px calc(var(--safe-bottom) + 8px); pointer-events:none;}
+  .tabbar .inner{display:flex; gap:6px; padding:6px; max-width:480px; width:100%; pointer-events:auto;
+    background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+    border:1px solid var(--stroke); border-radius:22px;
+    backdrop-filter:blur(22px) saturate(150%); -webkit-backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 18px 50px rgba(0,0,0,.5);}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 4px; border-radius:16px;
+    color:var(--muted); background:transparent; border:0; cursor:pointer; font-family:inherit; font-size:11px; transition:.18s;}
+  .tab.active{color:var(--ink); background:var(--glass);}
+  .tab svg{width:21px; height:21px;}
+  .tab.active svg{stroke:var(--accent-2);}
+
+  .toast{position:fixed; bottom:calc(var(--safe-bottom) + 96px); left:50%; z-index:80;
+    transform:translate(-50%, 60px); padding:13px 22px; border-radius:16px; font-size:14px; font-weight:500;
+    background:rgba(20,26,46,.9); border:1px solid var(--stroke-strong); backdrop-filter:blur(16px);
+    box-shadow:0 14px 40px rgba(0,0,0,.5); opacity:0; transition:.3s; pointer-events:none; white-space:nowrap;}
+  .toast.show{opacity:1; transform:translate(-50%, 0);}
+  .footnote{text-align:center; font-size:11px; color:var(--muted); opacity:.7; margin-top:6px;}
+</style>
+</head>
+<body>
+  <div class="bg-orbs"><div class="orb a"></div><div class="orb b"></div></div>
+  <div class="grain"></div>
+
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#04060f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 8v4l3 2"/>
+          </svg>
+        </div>
+        <div>
+          <h1>متتبع الوزن</h1>
+          <p id="greeting">سجّل وزنك كل يوم</p>
+        </div>
+      </div>
+      <button class="icon-btn" id="settingsBtn" aria-label="الإعدادات">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- ============ HOME ============ -->
+    <div class="view active" id="viewHome">
+      <section class="glass hero">
+        <div class="ring-row">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" width="118" height="118">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>
+              <circle id="bmiArc" cx="60" cy="60" r="52" fill="none" stroke="url(#g1)" stroke-width="10"
+                      stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+              <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#56e1c7"/></linearGradient></defs>
+            </svg>
+            <div class="center"><div class="big" id="bmiValue">—</div><div class="lbl">مؤشر الكتلة</div></div>
+          </div>
+          <div class="meta">
+            <p class="cat" id="bmiCat">أضف طولك</p>
+            <p class="desc" id="bmiDesc">اضغط على الإعدادات لإدخال طولك مرة واحدة وحساب مؤشر كتلة الجسم تلقائياً.</p>
+          </div>
+        </div>
+        <div class="chips">
+          <div class="chip">الطول <b id="chipHeight">—</b></div>
+          <div class="chip">آخر وزن <b id="chipWeight">—</b></div>
+          <div class="chip">التغيّر <b id="chipChange">—</b></div>
+        </div>
+      </section>
+
+      <div class="sec-title"><h2>تسجيل اليوم</h2><span id="editorTag" class="today-tag">اليوم</span></div>
+      <section class="glass editor">
+        <div class="date-nav">
+          <button class="nav" id="prevDay" aria-label="اليوم السابق">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <div class="date-field">
+            <label>التاريخ — اضغط لاختيار يوم سابق</label>
+            <div class="date-display" id="dateDisplay">—</div>
+            <svg class="cal-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+            <input type="date" id="dateInput" />
+          </div>
+          <button class="nav" id="nextDay" aria-label="اليوم التالي">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        </div>
+        <div class="weight-input">
+          <button class="stepper" id="minus" aria-label="إنقاص">−</button>
+          <div class="wfield">
+            <input id="weightInput" type="number" inputmode="decimal" step="0.1" min="0" max="500" placeholder="0.0" />
+            <div class="unit">كيلوجرام</div>
+          </div>
+          <button class="stepper" id="plus" aria-label="زيادة">+</button>
+        </div>
+        <div class="save-bar" id="saveBar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span id="saveText">سيتم الحفظ تلقائياً</span>
+        </div>
+        <button class="delete-day" id="deleteDay" style="display:none;">حذف تسجيل هذا اليوم</button>
+      </section>
+
+      <div class="sec-title"><h2>التطوّر</h2><span id="chartRange">آخر ٣٠ يوم</span></div>
+      <section class="glass chart-card">
+        <div id="chartHost"><div class="chart-empty">لا توجد بيانات كافية لعرض الرسم بعد.</div></div>
+      </section>
+
+      <div class="sec-title"><h2>آخر التسجيلات</h2><span id="historyCount"></span></div>
+      <section class="history" id="historyList">
+        <div class="glass empty">لا توجد تسجيلات بعد.<br/>ابدأ بإدخال وزن اليوم في الأعلى.</div>
+      </section>
+    </div>
+
+    <!-- ============ CALENDAR ============ -->
+    <div class="view" id="viewCalendar">
+      <div class="sec-title"><h2>التقويم الشهري</h2><span>اضغط أي يوم للتعديل السريع</span></div>
+      <section class="glass cal-card">
+        <div class="cal-head">
+          <button class="nav" id="calPrev" aria-label="الشهر السابق">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <div class="m" id="calMonthLabel">—</div>
+          <button class="nav" id="calNext" aria-label="الشهر التالي">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        </div>
+        <div class="cal-grid" id="calWeekdays"></div>
+        <div class="cal-grid" id="calGrid" style="margin-top:7px;"></div>
+        <div class="cal-legend">
+          <span><i style="background:linear-gradient(160deg,#7c9cff,#56e1c7)"></i>يوم مُسجّل</span>
+          <span><i style="box-shadow:0 0 0 2px var(--accent-2) inset; background:transparent"></i>اليوم</span>
+        </div>
+      </section>
+
+      <div class="sec-title"><h2>ملخّص الشهر</h2><span id="calSummaryRange"></span></div>
+      <section class="stat-grid" id="calSummary"></section>
+    </div>
+
+    <!-- ============ STATS ============ -->
+    <div class="view" id="viewStats">
+      <div class="sec-title"><h2>الهدف</h2><span id="goalTag"></span></div>
+      <section class="glass goal-card" id="goalCard">
+        <div class="goal-top">
+          <div class="v" id="goalCurrent">—<small> كجم الآن</small></div>
+          <div class="g" id="goalTarget">لم تحدد هدفاً</div>
+        </div>
+        <div class="bar"><i id="goalBar" style="width:0%"></i></div>
+        <div class="goal-note" id="goalNote">حدّد وزنك المستهدف من الإعدادات لتتبع تقدّمك.</div>
+      </section>
+
+      <div class="sec-title"><h2>إحصائيات عامة</h2><span id="statsTotalDays"></span></div>
+      <section class="stat-grid" id="statsGrid"></section>
+
+      <div class="sec-title"><h2>نطاقات مؤشر الكتلة</h2><span></span></div>
+      <section class="glass scale">
+        <h3 id="scaleTitle">مؤشر كتلتك الحالي</h3>
+        <div class="scale-pointer"><div class="p" id="scalePointer" style="right:0%; display:none;"></div></div>
+        <div class="scale-bar">
+          <i style="background:#5b9cff"></i><i style="background:#56e1c7"></i><i style="background:#ffcf6b"></i><i style="background:#ff8492"></i>
+        </div>
+        <div class="scale-marks">
+          <span style="position:absolute; right:0;">نقص</span>
+          <span style="position:absolute; right:30%;">طبيعي</span>
+          <span style="position:absolute; right:58%;">زيادة</span>
+          <span style="position:absolute; left:0;">سمنة</span>
+        </div>
+      </section>
+
+      <div class="sec-title"><h2>البيانات</h2><span></span></div>
+      <section class="glass" style="padding:18px; display:flex; flex-direction:column; gap:12px;">
+        <button class="btn" id="excelBtn">📊 تصدير تقرير Excel</button>
+        <button class="btn ghost" id="exportBtn">⬆︎ تصدير نسخة احتياطية</button>
+        <button class="btn ghost" id="importBtn">⬇︎ استيراد نسخة احتياطية</button>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none;" />
+        <p class="hint" style="text-align:center;">تقرير Excel يعرض كل تسجيلاتك مرتبة بالتاريخ مع تحليل كامل. النسخة الاحتياطية (JSON) لاستعادة بياناتك لاحقاً.</p>
+      </section>
+
+      <p class="footnote">يتم حفظ بياناتك على هذا الجهاز فقط • أضِف التطبيق إلى الشاشة الرئيسية</p>
+    </div>
+
+    <!-- ============ CALORIES ============ -->
+    <div class="view" id="viewCalories">
+      <div class="sec-title"><h2>سعرات اليوم</h2><span id="intakeTag" class="today-tag">اليوم</span></div>
+      <section class="glass intake-card">
+        <div class="date-nav">
+          <button class="nav" id="intakePrev" aria-label="اليوم السابق">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <div class="date-field">
+            <label>اليوم</label>
+            <div class="date-display" id="intakeDateDisplay">—</div>
+          </div>
+          <button class="nav" id="intakeNext" aria-label="اليوم التالي">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        </div>
+        <div class="intake-total">
+          <div class="big" id="intakeTotal">٠</div>
+          <div class="unit">إجمالي سعرات اليوم</div>
+        </div>
+        <div class="bar"><i id="intakeBar" style="width:0%"></i></div>
+        <div class="intake-info">
+          <span>الهدف: <b id="intakeTarget">—</b></span>
+          <span class="intake-remain" id="intakeRemain">—</span>
+        </div>
+        <div class="meal-add">
+          <input id="mealInput" type="number" inputmode="numeric" step="10" min="0" max="20000" placeholder="أضِف وجبة (سعرة)" />
+          <button id="mealAdd" aria-label="إضافة">إضافة</button>
+        </div>
+        <div id="mealListWrap" style="display:none;">
+          <div class="meal-list-label">وجبات اليوم</div>
+          <div class="meal-list" id="mealList"></div>
+        </div>
+        <button class="delete-day" id="intakeClear" style="display:none;">تصفير سعرات اليوم</button>
+      </section>
+
+      <div class="sec-title"><h2>سجل السعرات</h2><span id="intakeCount"></span></div>
+      <section class="history" id="intakeHistory">
+        <div class="glass empty">لا توجد تسجيلات سعرات بعد.<br/>أضِف ما أكلته اليوم في الأعلى.</div>
+      </section>
+
+      <p class="footnote">أضِف كل وجبة فتُجمَع تلقائياً • تُصفّر السعرات يومياً حسب وقت البداية في الإعدادات • عدّل الهدف من «حاسبة السعرات» في الإعدادات</p>
+    </div>
+  </div>
+
+  <!-- Tabbar -->
+  <nav class="tabbar"><div class="inner">
+    <button class="tab active" data-view="viewHome">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      الرئيسية
+    </button>
+    <button class="tab" data-view="viewCalendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+      التقويم
+    </button>
+    <button class="tab" data-view="viewStats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      الإحصائيات
+    </button>
+    <button class="tab" data-view="viewCalories" id="tabCalories">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s4 4 4 8a4 4 0 0 1-8 0c0-1.5.7-2.8 1.4-3.8"/><path d="M12 14a3 3 0 0 0-3 3c0 2 1.5 3.5 3 5 1.5-1.5 3-3 3-5a3 3 0 0 0-3-3z"/></svg>
+      السعرات
+    </button>
+  </div></nav>
+
+  <!-- Settings sheet -->
+  <div class="scrim" id="settingsScrim">
+    <div class="glass sheet" role="dialog" aria-modal="true">
+      <h3>الإعدادات</h3>
+      <div class="field"><label>الطول (سم) — يُدخل مرة واحدة</label>
+        <input id="heightInput" type="number" inputmode="decimal" step="0.5" min="80" max="260" placeholder="مثال: 175" /></div>
+      <div class="field"><label>الوزن المستهدف (كجم) — اختياري</label>
+        <input id="goalInput" type="number" inputmode="decimal" step="0.5" min="20" max="400" placeholder="مثال: 70" /></div>
+      <div class="field"><label>الاسم (اختياري)</label>
+        <input id="nameInput" type="text" placeholder="اسمك" maxlength="20" /></div>
+      <div class="toggle-row">
+        <div><div class="t-title">حاسبة السعرات</div><div class="t-sub">إظهار تبويب السعرات في الشريط السفلي</div></div>
+        <button class="switch" id="caloriesSwitch" role="switch" aria-checked="true"><span></span></button>
+      </div>
+      <div class="field"><label>بداية يوم السعرات (وقت التصفير)</label>
+        <select id="resetHourSelect" class="select">
+          <option value="0">منتصف الليل (١٢ ص)</option>
+          <option value="3">٣ صباحاً</option>
+          <option value="4">٤ صباحاً</option>
+          <option value="5">٥ صباحاً</option>
+          <option value="6">٦ صباحاً</option>
+          <option value="7">٧ صباحاً</option>
+        </select></div>
+
+      <div class="divider"></div>
+      <h3 style="font-size:16px;">حاسبة السعرات</h3>
+      <div class="field">
+        <label>طريقة تحديد الهدف اليومي</label>
+        <div class="seg" id="targetMode">
+          <button type="button" data-mode="calculated" class="active">احتساب تلقائي</button>
+          <button type="button" data-mode="manual">إدخال يدوي</button>
+        </div>
+      </div>
+
+      <div class="field" id="manualBox" style="display:none;">
+        <label>الهدف اليومي (سعرة)</label>
+        <input id="manualTargetInput" type="number" inputmode="numeric" step="10" min="0" max="20000" placeholder="مثال: ٢٠٠٠" />
+      </div>
+
+      <div id="calcBox">
+        <div class="field">
+          <label>الجنس</label>
+          <div class="seg" id="calcSex">
+            <button type="button" data-sex="male" class="active">ذكر</button>
+            <button type="button" data-sex="female">أنثى</button>
+          </div>
+        </div>
+        <div class="calc-grid2">
+          <div class="field"><label>العمر (سنة)</label>
+            <input id="calcAge" type="number" inputmode="numeric" step="1" min="10" max="100" placeholder="مثال: ٢٥" /></div>
+          <div class="field"><label>مستوى النشاط</label>
+            <select id="calcActivity" class="select" style="padding:0 12px 0 34px; font-size:13px;">
+              <option value="1.2">خامل</option>
+              <option value="1.375">خفيف</option>
+              <option value="1.55" selected>متوسط</option>
+              <option value="1.725">عالٍ</option>
+              <option value="1.9">عالٍ جداً</option>
+            </select></div>
+        </div>
+        <p class="hint" style="margin-top:-6px;">يُستخدم طولك أعلاه وآخر وزن سجّلته تلقائياً في الحساب.</p>
+        <div class="tdee-card" style="margin-top:6px; padding:18px;">
+          <div class="tdee-big" id="tdeeValue">—</div>
+          <div class="tdee-unit">سعرة / يوم — سعرات المحافظة</div>
+          <div class="tdee-sub" id="bmrValue">أدخل بياناتك لحساب السعرات</div>
+        </div>
+        <div class="stat-grid" id="calcGoals" style="margin-top:10px;">
+          <div class="glass empty" style="grid-column:1/-1;">أكمل بياناتك لعرض الأهداف.</div>
+        </div>
+        <p class="hint" style="text-align:center; margin-top:8px;">القيم تقديرية بمعادلة Mifflin-St Jeor • استشر مختصاً قبل أي حِمية</p>
+      </div>
+
+      <div class="row-2">
+        <button class="btn" id="saveSettings">حفظ</button>
+        <button class="btn ghost" id="closeSettings">إغلاق</button>
+      </div>
+      <div class="divider"></div>
+      <p class="hint">لمشاركة التطبيق مع أصدقائك أرسِل لهم الرابط. بياناتهم محفوظة على أجهزتهم بشكل خاص ومنفصل.</p>
+      <button class="danger-link" id="resetAll">مسح جميع البيانات</button>
+    </div>
+  </div>
+
+  <!-- Quick-log sheet -->
+  <div class="scrim" id="qlScrim">
+    <div class="glass sheet" role="dialog" aria-modal="true">
+      <h3 id="qlTitle">تسجيل سريع</h3>
+      <div class="ql-weight">
+        <button class="stepper" id="qlMinus" aria-label="إنقاص">−</button>
+        <div class="wfield" style="min-width:130px;">
+          <input id="qlInput" type="number" inputmode="decimal" step="0.1" min="0" max="500" placeholder="0.0" />
+          <div class="unit">كيلوجرام</div>
+        </div>
+        <button class="stepper" id="qlPlus" aria-label="زيادة">+</button>
+      </div>
+      <div class="save-bar" id="qlSaveBar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        <span id="qlSaveText">سيتم الحفظ تلقائياً</span>
+      </div>
+      <div class="row-2">
+        <button class="btn" id="qlDone">تم</button>
+        <button class="btn ghost" id="qlDelete">حذف</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const KEY = "wt_data_v1";
+  const $ = (s) => document.querySelector(s);
+
+  const defaultState = { height:null, name:"", goal:null, entries:{}, sex:"male", age:null, activity:"1.55", showCalories:true, intake:{}, resetHour:0, targetMode:"calculated", manualTarget:null };
+  let state = load();
+  let selectedDate = todayKey();
+  let calCursor = firstOfMonth(new Date());      // Date at day 1 of viewed month
+  let quickDate = null;
+  let selectedIntakeDay = null;                  // set after helpers defined (depends on resetHour)
+
+  function load(){
+    try{ const raw=localStorage.getItem(KEY); if(raw) return Object.assign({}, defaultState, JSON.parse(raw)); }catch(e){}
+    return structuredClone(defaultState);
+  }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+  // intake is stored as an array of meal calories per day; migrate legacy single-number totals
+  function normalizeIntake(){
+    if(!state.intake || typeof state.intake!=="object") state.intake={};
+    let changed=false;
+    for(const k in state.intake){
+      const v=state.intake[k];
+      if(typeof v==="number"){ state.intake[k]= v>0 ? [Math.round(v)] : []; changed=true; }
+      else if(!Array.isArray(v)){ delete state.intake[k]; changed=true; }
+    }
+    if(changed) save();
+  }
+  function intakeTotal(k){ const a=state.intake[k]; return Array.isArray(a)? a.reduce((s,x)=>s+(+x||0),0) : 0; }
+
+  /* ---------- date helpers ---------- */
+  function todayKey(){ return toKey(new Date()); }
+  function toKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+  function fromKey(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d); }
+  function addDays(k,n){ const d=fromKey(k); d.setDate(d.getDate()+n); return toKey(d); }
+  function firstOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+
+  const AR_DAYS=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const AR_MONTHS=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  // Week starts Saturday: column index for a JS getDay()
+  const WD_SHORT=["السبت","الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]; // col 0..6
+  function colOf(jsDay){ return (jsDay+1)%7; } // Sat->0 ... Fri->6
+
+  function arNum(n){ return String(n).replace(/[0-9]/g, d=>"٠١٢٣٤٥٦٧٨٩"[d]); }
+  function prettyDate(k){ const d=fromKey(k); return `${AR_DAYS[d.getDay()]}، ${arNum(d.getDate())} ${AR_MONTHS[d.getMonth()]} ${arNum(d.getFullYear())}`; }
+  function relativeLabel(k){ if(k===todayKey()) return "اليوم"; if(k===addDays(todayKey(),-1)) return "أمس"; return ""; }
+  function round1(n){ return Math.round(n*10)/10; }
+
+  /* ---------- BMI ---------- */
+  function bmiCategory(b){
+    if(b<18.5) return {name:"نقص في الوزن", desc:"وزنك أقل من المعدّل الطبيعي. تابع تقدّمك يومياً.", pct:b/40};
+    if(b<25)   return {name:"وزن طبيعي", desc:"رائع! وزنك ضمن النطاق الصحي المثالي.", pct:b/40};
+    if(b<30)   return {name:"زيادة في الوزن", desc:"وزنك أعلى قليلاً من الطبيعي. الاستمرار في المتابعة يساعدك.", pct:b/40};
+    return {name:"سمنة", desc:"يُنصح باستشارة مختص. تتبّع وزنك خطوة أولى ممتازة.", pct:Math.min(b/40,1)};
+  }
+
+  /* ---------- data accessors ---------- */
+  function sortedKeys(){ return Object.keys(state.entries).sort(); }
+  function latestEntry(){ const ks=sortedKeys(); return ks.length? {key:ks[ks.length-1], val:state.entries[ks[ks.length-1]]}:null; }
+
+  /* ================= HOME ================= */
+  function renderHero(){
+    const latest=latestEntry(), h=state.height;
+    $("#chipHeight").textContent = h? arNum(h)+" سم" : "—";
+    $("#chipWeight").textContent = latest? arNum(round1(latest.val))+" كجم" : "—";
+    const ks=sortedKeys();
+    if(ks.length>=2){
+      const diff=round1(state.entries[ks[ks.length-1]]-state.entries[ks[ks.length-2]]);
+      $("#chipChange").textContent = diff===0? "ثابت" : (diff>0?"▲ ":"▼ ")+arNum(Math.abs(diff))+" كجم";
+    } else $("#chipChange").textContent="—";
+
+    const arc=$("#bmiArc"), CIRC=2*Math.PI*52;
+    if(h && latest){
+      const bmi=latest.val/Math.pow(h/100,2), cat=bmiCategory(bmi);
+      $("#bmiValue").textContent=arNum(round1(bmi)); $("#bmiCat").textContent=cat.name; $("#bmiDesc").textContent=cat.desc;
+      arc.style.strokeDashoffset=CIRC*(1-Math.min(cat.pct,1));
+    } else {
+      $("#bmiValue").textContent="—";
+      $("#bmiCat").textContent=h?"أدخل وزنك":"أضف طولك";
+      $("#bmiDesc").textContent=h?"سجّل وزن اليوم لحساب مؤشر كتلة الجسم.":"اضغط على الإعدادات لإدخال طولك مرة واحدة وحساب مؤشر كتلة الجسم تلقائياً.";
+      arc.style.strokeDashoffset=CIRC;
+    }
+    $("#greeting").textContent = state.name? `أهلاً ${state.name} 👋` : "سجّل وزنك كل يوم";
+  }
+
+  function renderEditor(){
+    $("#dateDisplay").textContent=prettyDate(selectedDate);
+    $("#dateInput").value=selectedDate;
+    $("#editorTag").textContent=relativeLabel(selectedDate)||"تعديل يوم";
+    const val=state.entries[selectedDate], wi=$("#weightInput");
+    if(document.activeElement!==wi) wi.value=(val!=null)?val:"";
+    $("#nextDay").disabled=selectedDate>=todayKey();
+    $("#deleteDay").style.display=(val!=null)?"block":"none";
+    setSave(val!=null?"saved-quiet":"idle", homeBars);
+  }
+
+  function renderHistory(){
+    const ks=sortedKeys().reverse().slice(0,8), host=$("#historyList"), total=sortedKeys().length;
+    $("#historyCount").textContent= total? arNum(total)+" تسجيل" : "";
+    if(!ks.length){ host.innerHTML='<div class="glass empty">لا توجد تسجيلات بعد.<br/>ابدأ بإدخال وزن اليوم في الأعلى.</div>'; return; }
+    host.innerHTML="";
+    ks.forEach((k,i)=>{
+      const val=state.entries[k], prevKey=ks[i+1];
+      let diffHtml='<span class="r-diff flat">—</span>';
+      if(prevKey!=null){
+        const diff=round1(val-state.entries[prevKey]);
+        if(diff>0) diffHtml=`<span class="r-diff up">▲ ${arNum(Math.abs(diff))}</span>`;
+        else if(diff<0) diffHtml=`<span class="r-diff down">▼ ${arNum(Math.abs(diff))}</span>`;
+        else diffHtml='<span class="r-diff flat">٠</span>';
+      }
+      const rel=relativeLabel(k);
+      const row=document.createElement("div"); row.className="glass row";
+      row.innerHTML=`<span class="dot"></span>
+        <div class="r-date"><div class="d">${prettyDate(k)}</div><div class="sub">${rel||"اضغط للتعديل"}</div></div>
+        <div class="r-val">${arNum(round1(val))}<small>كجم</small></div>${diffHtml}`;
+      row.addEventListener("click",()=>{ selectedDate=k; renderEditor(); window.scrollTo({top:0,behavior:"smooth"}); });
+      host.appendChild(row);
+    });
+  }
+
+  function renderChart(){
+    const host=$("#chartHost"), ks=sortedKeys().slice(-30);
+    if(ks.length<2){ host.innerHTML='<div class="chart-empty">لا توجد بيانات كافية لعرض الرسم بعد.</div>'; return; }
+    const W=440,H=150,pad=14, vals=ks.map(k=>state.entries[k]);
+    const min=Math.min(...vals),max=Math.max(...vals),span=(max-min)||1;
+    const x=i=>pad+i*((W-2*pad)/(ks.length-1)), y=v=>pad+(1-(v-min)/span)*(H-2*pad);
+    let dLine="";
+    ks.forEach((k,i)=>{ dLine+=(i?"L":"M")+x(i).toFixed(1)+" "+y(state.entries[k]).toFixed(1)+" "; });
+    const dArea=dLine+`L ${x(ks.length-1).toFixed(1)} ${H-pad} L ${x(0).toFixed(1)} ${H-pad} Z`;
+    const dots=ks.map((k,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(state.entries[k]).toFixed(1)}" r="${i===ks.length-1?4:2.4}" fill="${i===ks.length-1?'#56e1c7':'#7c9cff'}"/>`).join("");
+    host.innerHTML=`<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c9cff" stop-opacity=".35"/><stop offset="1" stop-color="#7c9cff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#56e1c7"/></linearGradient></defs>
+      <path d="${dArea}" fill="url(#area)"/><path d="${dLine}" fill="none" stroke="url(#line)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}</svg></div>`;
+  }
+
+  /* ================= CALENDAR ================= */
+  function renderWeekdays(){
+    const host=$("#calWeekdays"); if(host.children.length) return;
+    WD_SHORT.forEach(w=>{ const el=document.createElement("div"); el.className="cal-wd"; el.textContent=w; host.appendChild(el); });
+  }
+  function renderCalendar(){
+    renderWeekdays();
+    const y=calCursor.getFullYear(), m=calCursor.getMonth();
+    $("#calMonthLabel").textContent=`${AR_MONTHS[m]} ${arNum(y)}`;
+    // disable next beyond current month
+    const now=new Date();
+    $("#calNext").disabled = (y>now.getFullYear() || (y===now.getFullYear() && m>=now.getMonth()));
+
+    const grid=$("#calGrid"); grid.innerHTML="";
+    const firstCol=colOf(new Date(y,m,1).getDay());
+    for(let i=0;i<firstCol;i++){ const p=document.createElement("div"); p.className="cal-cell pad"; grid.appendChild(p); }
+    const days=new Date(y,m+1,0).getDate(), tk=todayKey();
+    for(let d=1; d<=days; d++){
+      const key=toKey(new Date(y,m,d)), val=state.entries[key], isFuture=key>tk;
+      const cell=document.createElement("div");
+      cell.className="cal-cell"+(val!=null?" has":"")+(key===tk?" today":"")+(isFuture?" future":"");
+      cell.innerHTML=`<span class="num">${arNum(d)}</span>${val!=null?`<span class="w">${arNum(round1(val))}</span>`:""}`;
+      if(!isFuture) cell.addEventListener("click",()=>openQuickLog(key));
+      grid.appendChild(cell);
+    }
+    renderCalSummary(y,m);
+  }
+  function renderCalSummary(y,m){
+    const host=$("#calSummary"); const prefix=`${y}-${String(m+1).padStart(2,"0")}-`;
+    const keys=sortedKeys().filter(k=>k.startsWith(prefix)), vals=keys.map(k=>state.entries[k]);
+    $("#calSummaryRange").textContent=`${AR_MONTHS[m]} ${arNum(y)}`;
+    if(!vals.length){ host.innerHTML='<div class="glass empty" style="grid-column:1/-1;">لا توجد تسجيلات في هذا الشهر.</div>'; return; }
+    const min=Math.min(...vals),max=Math.max(...vals),avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const change=round1(vals[vals.length-1]-vals[0]);
+    const changeTxt=change===0?"ثابت":(change>0?"▲ ":"▼ ")+arNum(Math.abs(change))+" كجم";
+    host.innerHTML=
+      card(arNum(keys.length),"أيام مُسجّلة")+
+      card(arNum(round1(avg))+'<small>كجم</small>',"متوسط الوزن")+
+      card(arNum(round1(min))+'<small>كجم</small>',"أدنى وزن")+
+      card(arNum(round1(max))+'<small>كجم</small>',"أعلى وزن")+
+      `<div class="glass stat" style="grid-column:1/-1;"><div class="v">${changeTxt}</div><div class="k">صافي التغيّر خلال الشهر</div></div>`;
+  }
+  function card(v,k){ return `<div class="glass stat"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
+
+  /* ================= STATS ================= */
+  function streaks(){
+    const keys=sortedKeys(); if(!keys.length) return {current:0,longest:0};
+    let longest=1,run=1;
+    for(let i=1;i<keys.length;i++){ if(addDays(keys[i-1],1)===keys[i]) run++; else run=1; longest=Math.max(longest,run); }
+    let current=0, cursor=todayKey();
+    if(!(cursor in state.entries)) cursor=addDays(cursor,-1);
+    if(cursor in state.entries){ current=1; let c=cursor; while(addDays(c,-1) in state.entries){ current++; c=addDays(c,-1); } }
+    return {current,longest};
+  }
+  function renderStats(){
+    const ks=sortedKeys(), vals=ks.map(k=>state.entries[k]);
+    $("#statsTotalDays").textContent= ks.length? arNum(ks.length)+" يوم" : "";
+    const grid=$("#statsGrid");
+    if(!vals.length){ grid.innerHTML='<div class="glass empty" style="grid-column:1/-1;">لا توجد بيانات بعد.</div>'; }
+    else{
+      const min=Math.min(...vals),max=Math.max(...vals),avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+      const total=round1(vals[vals.length-1]-vals[0]);
+      const totalTxt=total===0?"ثابت":(total>0?"▲ ":"▼ ")+arNum(Math.abs(total));
+      const st=streaks();
+      grid.innerHTML=
+        card(arNum(round1(avg))+'<small>كجم</small>',"متوسط الوزن")+
+        card(totalTxt+'<small>كجم</small>',"إجمالي التغيّر")+
+        card(arNum(round1(min))+'<small>كجم</small>',"أدنى وزن")+
+        card(arNum(round1(max))+'<small>كجم</small>',"أعلى وزن")+
+        card(arNum(st.current)+'<small>يوم</small>',"السلسلة الحالية")+
+        card(arNum(st.longest)+'<small>يوم</small>',"أطول سلسلة");
+    }
+    renderGoal(); renderScale();
+  }
+  function renderGoal(){
+    const latest=latestEntry(), ks=sortedKeys();
+    const cur = latest? latest.val : null;
+    $("#goalCurrent").innerHTML = cur!=null? `${arNum(round1(cur))}<small> كجم الآن</small>` : `—<small> كجم الآن</small>`;
+    if(state.goal && cur!=null && ks.length){
+      const start=state.entries[ks[0]], goal=state.goal;
+      $("#goalTarget").textContent=`الهدف ${arNum(goal)} كجم`;
+      $("#goalTag").textContent="";
+      const totalDist=Math.abs(start-goal)||1, done=Math.abs(start-cur);
+      let pct=Math.max(0,Math.min(100, (done/totalDist)*100));
+      // if moved past goal, full
+      if((start>goal && cur<=goal) || (start<goal && cur>=goal)) pct=100;
+      $("#goalBar").style.width=pct.toFixed(0)+"%";
+      const remain=round1(cur-goal);
+      if(Math.abs(remain)<0.05) $("#goalNote").textContent="🎉 لقد بلغت هدفك! أحسنت.";
+      else if(remain>0) $("#goalNote").textContent=`متبقٍّ ${arNum(Math.abs(remain))} كجم للوصول إلى هدفك (${arNum(pct.toFixed(0))}%)`;
+      else $("#goalNote").textContent=`أنت أقل من هدفك بـ ${arNum(Math.abs(remain))} كجم`;
+    } else {
+      $("#goalTarget").textContent="لم تحدد هدفاً";
+      $("#goalBar").style.width="0%";
+      $("#goalNote").textContent= state.goal? "سجّل وزنك لمتابعة تقدّمك نحو الهدف." : "حدّد وزنك المستهدف من الإعدادات لتتبع تقدّمك.";
+    }
+  }
+  function renderScale(){
+    const latest=latestEntry(), h=state.height, ptr=$("#scalePointer");
+    if(h && latest){
+      const bmi=latest.val/Math.pow(h/100,2);
+      $("#scaleTitle").textContent=`مؤشر كتلتك الحالي: ${arNum(round1(bmi))} — ${bmiCategory(bmi).name}`;
+      // map BMI 15..40 across bar (right=low in RTL). pct from right.
+      const pos=Math.max(0,Math.min(1,(bmi-15)/(40-15)));
+      ptr.style.display="block"; ptr.style.right=(pos*100).toFixed(1)+"%";
+    } else { $("#scaleTitle").textContent="أضف طولك ووزنك لعرض مؤشر الكتلة"; ptr.style.display="none"; }
+  }
+
+  /* ============ CALORIE CALCULATOR (in settings) ============ */
+  // live preview: height comes from the settings height field, weight from latest logged entry
+  function renderCalcPreview(){
+    const ai=$("#calcAge"), act=$("#calcActivity");
+    if(document.activeElement!==ai) ai.value = state.age!=null? state.age : "";
+    act.value = state.activity || "1.55";
+    document.querySelectorAll("#calcSex button").forEach(b=>b.classList.toggle("active", b.dataset.sex===state.sex));
+
+    const h = parseFloat($("#heightInput").value) || state.height || NaN;
+    const latest=latestEntry(), w = latest? latest.val : NaN;
+    const age=parseFloat(ai.value), mult=parseFloat(act.value);
+    const big=$("#tdeeValue"), sub=$("#bmrValue"), goals=$("#calcGoals");
+    if(isNaN(w)||isNaN(h)||isNaN(age)||w<=0||h<=0||age<=0){
+      big.textContent="—";
+      sub.textContent = isNaN(w) ? "سجّل وزنك أولاً ليُحتسب الهدف" : "أدخل العمر والطول لحساب السعرات";
+      goals.innerHTML='<div class="glass empty" style="grid-column:1/-1;">أكمل بياناتك لعرض الأهداف.</div>';
+      return;
+    }
+    // Mifflin-St Jeor
+    const bmr = 10*w + 6.25*h - 5*age + (state.sex==="female" ? -161 : 5);
+    const tdee = bmr*mult;
+    big.textContent = arNum(Math.round(tdee));
+    sub.textContent = `الوزن ${arNum(round1(w))} كجم • معدل الأيض ${arNum(Math.round(bmr))} سعرة`;
+    goals.innerHTML =
+      card(arNum(Math.round(tdee-500))+'<small>سعرة</small>',"إنقاص الوزن").replace('class="v"','class="v lose"')+
+      card(arNum(Math.round(tdee))+'<small>سعرة</small>',"المحافظة على الوزن")+
+      card(arNum(Math.round(tdee+500))+'<small>سعرة</small>',"زيادة الوزن").replace('class="v"','class="v gain"')+
+      card(arNum(Math.round(tdee-250))+'<small>سعرة</small>',"إنقاص بطيء")+
+      `<div class="glass stat" style="grid-column:1/-1;"><div class="v">${arNum(Math.round(w*1.6))}–${arNum(Math.round(w*2.2))}<small>جم</small></div><div class="k">البروتين المقترح يومياً</div></div>`;
+  }
+
+  /* ================= calorie intake ================= */
+  function calDayKey(d){ const x=new Date(d); if(x.getHours() < (state.resetHour||0)) x.setDate(x.getDate()-1); return toKey(x); }
+  function intakeTodayKey(){ return calDayKey(new Date()); }
+  function computeTDEE(){
+    const latest=latestEntry(); const w=latest?latest.val:null, h=state.height, age=state.age, mult=parseFloat(state.activity||"1.55");
+    if(!w||!h||!age) return null;
+    const bmr = 10*w + 6.25*h - 5*age + (state.sex==="female" ? -161 : 5);
+    return Math.round(bmr*mult);
+  }
+  // daily calorie target: either auto-computed (TDEE) or a manual number from settings
+  function getTarget(){
+    if(state.targetMode==="manual") return (state.manualTarget>0)? state.manualTarget : null;
+    return computeTDEE();
+  }
+  function intakeRelLabel(k){ if(k===intakeTodayKey()) return "اليوم"; if(k===addDays(intakeTodayKey(),-1)) return "أمس"; return ""; }
+  function paintIntake(){
+    if(!selectedIntakeDay) selectedIntakeDay=intakeTodayKey();
+    $("#intakeDateDisplay").textContent=prettyDate(selectedIntakeDay);
+    $("#intakeTag").textContent=intakeRelLabel(selectedIntakeDay)||"تعديل يوم";
+    $("#intakeNext").disabled=selectedIntakeDay>=intakeTodayKey();
+    const meals = Array.isArray(state.intake[selectedIntakeDay]) ? state.intake[selectedIntakeDay] : [];
+    const total = meals.reduce((s,x)=>s+(+x||0),0);
+    $("#intakeTotal").textContent = arNum(total);
+    $("#intakeClear").style.display = meals.length ? "block" : "none";
+    const wrap=$("#mealListWrap"), list=$("#mealList");
+    if(meals.length){
+      wrap.style.display="";
+      list.innerHTML = meals.map((m,i)=>`<span class="meal-chip">${arNum(m)}<button class="x" data-i="${i}" aria-label="حذف">✕</button></span>`).join("");
+    } else { wrap.style.display="none"; list.innerHTML=""; }
+    const target=getTarget(), e=total;
+    if(target){
+      $("#intakeTarget").textContent=arNum(target)+" سعرة";
+      $("#intakeBar").style.width=Math.max(0,Math.min(100,e/target*100)).toFixed(0)+"%";
+      const remain=target-e, rEl=$("#intakeRemain");
+      if(remain>=0){ rEl.classList.remove("over"); rEl.textContent="المتبقّي: "+arNum(remain)+" سعرة"; }
+      else { rEl.classList.add("over"); rEl.textContent="تجاوزت بـ "+arNum(Math.abs(remain))+" سعرة"; }
+    } else {
+      $("#intakeTarget").textContent="—"; $("#intakeBar").style.width="0%";
+      $("#intakeRemain").classList.remove("over");
+      $("#intakeRemain").textContent = state.targetMode==="manual" ? "حدّد الهدف من الإعدادات" : "أكمل بياناتك في الإعدادات";
+    }
+  }
+  function renderIntake(){ paintIntake(); }
+  function renderIntakeHistory(){
+    const all=Object.keys(state.intake).filter(k=>intakeTotal(k)>0).sort().reverse(), ks=all.slice(0,8), host=$("#intakeHistory");
+    $("#intakeCount").textContent= all.length? arNum(all.length)+" يوم" : "";
+    if(!ks.length){ host.innerHTML='<div class="glass empty">لا توجد تسجيلات سعرات بعد.<br/>أضِف ما أكلته اليوم في الأعلى.</div>'; return; }
+    const target=getTarget(); host.innerHTML="";
+    ks.forEach(k=>{
+      const v=intakeTotal(k); let badge='<span class="r-diff flat">—</span>';
+      if(target){ const diff=v-target; badge = diff>0?`<span class="r-diff up">▲ ${arNum(diff)}</span>`:`<span class="r-diff down">▼ ${arNum(Math.abs(diff))}</span>`; }
+      const rel=intakeRelLabel(k);
+      const row=document.createElement("div"); row.className="glass row";
+      row.innerHTML=`<span class="dot" style="background:var(--accent-2)"></span>
+        <div class="r-date"><div class="d">${prettyDate(k)}</div><div class="sub">${rel||"اضغط للتعديل"}</div></div>
+        <div class="r-val">${arNum(v)}<small>سعرة</small></div>${badge}`;
+      row.addEventListener("click",()=>{ selectedIntakeDay=k; renderIntake(); window.scrollTo({top:0,behavior:"smooth"}); });
+      host.appendChild(row);
+    });
+  }
+  // add a meal's calories to the selected day's running total
+  function addMeal(){
+    const inp=$("#mealInput"), v=Math.round(parseFloat(inp.value));
+    if(inp.value==="" || isNaN(v) || v<=0){ inp.focus(); return; }
+    const amount=Math.min(v,20000);
+    if(!Array.isArray(state.intake[selectedIntakeDay])) state.intake[selectedIntakeDay]=[];
+    state.intake[selectedIntakeDay].push(amount); save();
+    inp.value=""; paintIntake(); renderIntakeHistory();
+    if(navigator.vibrate) navigator.vibrate(8);
+    showToast("أُضيفت "+arNum(amount)+" سعرة");
+    inp.focus();
+  }
+  $("#mealAdd").addEventListener("click",addMeal);
+  $("#mealInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addMeal(); } });
+  $("#mealList").addEventListener("click",e=>{
+    const b=e.target.closest("button[data-i]"); if(!b) return;
+    const i=parseInt(b.dataset.i,10), arr=state.intake[selectedIntakeDay];
+    if(Array.isArray(arr)){ arr.splice(i,1); if(!arr.length) delete state.intake[selectedIntakeDay]; save(); paintIntake(); renderIntakeHistory(); }
+  });
+  $("#intakePrev").addEventListener("click",()=>{ selectedIntakeDay=addDays(selectedIntakeDay,-1); renderIntake(); });
+  $("#intakeNext").addEventListener("click",()=>{ if(selectedIntakeDay<intakeTodayKey()){ selectedIntakeDay=addDays(selectedIntakeDay,1); renderIntake(); } });
+  $("#intakeClear").addEventListener("click",()=>{ delete state.intake[selectedIntakeDay]; save(); renderIntake(); renderIntakeHistory(); showToast("تم تصفير اليوم"); });
+
+  /* ================= save / commit ================= */
+  function commitWeight(dateKey, raw, bars){
+    const v=parseFloat(raw);
+    if(raw==="" || isNaN(v)){
+      if(state.entries[dateKey]!=null){ delete state.entries[dateKey]; save(); }
+      if(bars) setSave("idle", bars);
+      refresh(); return;
+    }
+    state.entries[dateKey]=round1(Math.min(Math.max(v,1),500)); save();
+    if(bars){ setSave("saving",bars); clearTimeout(bars._t); bars._t=setTimeout(()=>setSave("saved",bars),180); }
+    refresh();
+  }
+  function setSave(mode, bars){
+    const bar=bars.bar, txt=bars.txt; bar.classList.remove("saved");
+    if(mode==="idle") txt.textContent="سيتم الحفظ تلقائياً";
+    else if(mode==="saved-quiet"){ txt.textContent="محفوظ"; bar.classList.add("saved"); }
+    else if(mode==="saving") txt.textContent="جارٍ الحفظ…";
+    else if(mode==="saved"){ txt.textContent="تم الحفظ"; bar.classList.add("saved"); }
+  }
+  const homeBars={ bar:$("#saveBar"), txt:$("#saveText") };
+  const qlBars={ bar:$("#qlSaveBar"), txt:$("#qlSaveText") };
+
+  function refresh(){
+    renderHero(); renderEditor(); renderChart(); renderHistory();
+    if($("#viewCalendar").classList.contains("active")) renderCalendar();
+    if($("#viewStats").classList.contains("active")) renderStats();
+    if($("#viewCalories").classList.contains("active")){ renderIntake(); renderIntakeHistory(); }
+    if(scrim.classList.contains("open")) renderCalcPreview();
+  }
+
+  /* ---------- home editor wiring ---------- */
+  const wi=$("#weightInput"); let saveTimer=null;
+  wi.addEventListener("input",()=>{ setSave("saving",homeBars); clearTimeout(saveTimer); saveTimer=setTimeout(()=>commitWeight(selectedDate,wi.value,homeBars),450); });
+  wi.addEventListener("blur",()=>{ clearTimeout(saveTimer); commitWeight(selectedDate,wi.value,homeBars); });
+  $("#plus").addEventListener("click",()=>stepHome(0.1));
+  $("#minus").addEventListener("click",()=>stepHome(-0.1));
+  function stepHome(delta){
+    let cur=parseFloat(wi.value); if(isNaN(cur)) cur=latestEntry()?latestEntry().val:70;
+    cur=round1(Math.min(Math.max(cur+delta,1),500)); wi.value=cur;
+    clearTimeout(saveTimer); commitWeight(selectedDate,String(cur),homeBars);
+    if(navigator.vibrate) navigator.vibrate(8);
+  }
+  $("#prevDay").addEventListener("click",()=>{ selectedDate=addDays(selectedDate,-1); renderEditor(); });
+  $("#nextDay").addEventListener("click",()=>{ if(selectedDate<todayKey()){ selectedDate=addDays(selectedDate,1); renderEditor(); } });
+  $("#dateInput").addEventListener("change",e=>{ if(!e.target.value) return; selectedDate=e.target.value>todayKey()?todayKey():e.target.value; renderEditor(); });
+  $("#deleteDay").addEventListener("click",()=>{ delete state.entries[selectedDate]; save(); wi.value=""; refresh(); showToast("تم حذف التسجيل"); });
+
+  /* ---------- calendar wiring ---------- */
+  $("#calPrev").addEventListener("click",()=>{ calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()-1,1); renderCalendar(); });
+  $("#calNext").addEventListener("click",()=>{ if($("#calNext").disabled) return; calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()+1,1); renderCalendar(); });
+
+  /* ---------- quick log ---------- */
+  const qlScrim=$("#qlScrim"), qli=$("#qlInput"); let qlTimer=null;
+  function openQuickLog(key){
+    quickDate=key; $("#qlTitle").textContent=prettyDate(key);
+    const val=state.entries[key]; qli.value=(val!=null)?val:"";
+    setSave(val!=null?"saved-quiet":"idle", qlBars);
+    qlScrim.classList.add("open");
+  }
+  function closeQuickLog(){ qlScrim.classList.remove("open"); }
+  qli.addEventListener("input",()=>{ setSave("saving",qlBars); clearTimeout(qlTimer); qlTimer=setTimeout(()=>commitWeight(quickDate,qli.value,qlBars),400); });
+  $("#qlPlus").addEventListener("click",()=>stepQl(0.1));
+  $("#qlMinus").addEventListener("click",()=>stepQl(-0.1));
+  function stepQl(delta){
+    let cur=parseFloat(qli.value); if(isNaN(cur)) cur=latestEntry()?latestEntry().val:70;
+    cur=round1(Math.min(Math.max(cur+delta,1),500)); qli.value=cur;
+    clearTimeout(qlTimer); commitWeight(quickDate,String(cur),qlBars);
+    if(navigator.vibrate) navigator.vibrate(8);
+  }
+  $("#qlDone").addEventListener("click",()=>{ clearTimeout(qlTimer); commitWeight(quickDate,qli.value,qlBars); closeQuickLog(); });
+  $("#qlDelete").addEventListener("click",()=>{ delete state.entries[quickDate]; save(); refresh(); closeQuickLog(); showToast("تم حذف التسجيل"); });
+  qlScrim.addEventListener("click",e=>{ if(e.target===qlScrim){ clearTimeout(qlTimer); commitWeight(quickDate,qli.value,qlBars); closeQuickLog(); } });
+
+  /* ---------- tabs ---------- */
+  function activateTab(viewId){
+    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active", x.dataset.view===viewId));
+    document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active", x.id===viewId));
+    if(viewId==="viewCalendar"){ calCursor=firstOfMonth(new Date()); renderCalendar(); }
+    if(viewId==="viewStats") renderStats();
+    if(viewId==="viewCalories"){ selectedIntakeDay=intakeTodayKey(); renderIntake(); renderIntakeHistory(); }
+  }
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+    activateTab(t.dataset.view); window.scrollTo({top:0,behavior:"smooth"});
+  }));
+
+  /* ---------- settings ---------- */
+  const scrim=$("#settingsScrim"), calSwitch=$("#caloriesSwitch");
+  function setSwitch(on){ calSwitch.classList.toggle("on", !!on); calSwitch.setAttribute("aria-checked", on?"true":"false"); }
+  function applyCaloriesVisibility(){
+    const show = state.showCalories!==false;
+    $("#tabCalories").style.display = show ? "" : "none";
+    if(!show && $("#viewCalories").classList.contains("active")) activateTab("viewHome");
+  }
+  calSwitch.addEventListener("click",()=>setSwitch(!calSwitch.classList.contains("on")));
+  function applyTargetMode(){
+    const manual = state.targetMode==="manual";
+    $("#manualBox").style.display = manual ? "" : "none";
+    $("#calcBox").style.display = manual ? "none" : "";
+    document.querySelectorAll("#targetMode button").forEach(b=>b.classList.toggle("active", b.dataset.mode===(manual?"manual":"calculated")));
+  }
+  function openSettings(){
+    $("#heightInput").value=state.height||""; $("#goalInput").value=state.goal||""; $("#nameInput").value=state.name||"";
+    setSwitch(state.showCalories!==false); $("#resetHourSelect").value=String(state.resetHour||0);
+    $("#manualTargetInput").value=state.manualTarget||"";
+    applyTargetMode(); renderCalcPreview();
+    scrim.classList.add("open");
+  }
+  function closeSettings(){ scrim.classList.remove("open"); }
+  $("#settingsBtn").addEventListener("click",openSettings);
+  $("#closeSettings").addEventListener("click",closeSettings);
+  scrim.addEventListener("click",e=>{ if(e.target===scrim) closeSettings(); });
+  $("#saveSettings").addEventListener("click",()=>{
+    const h=parseFloat($("#heightInput").value); state.height=(!isNaN(h)&&h>0)?Math.min(Math.max(h,80),260):null;
+    const g=parseFloat($("#goalInput").value); state.goal=(!isNaN(g)&&g>0)?Math.min(Math.max(g,20),400):null;
+    state.name=$("#nameInput").value.trim();
+    state.showCalories=calSwitch.classList.contains("on");
+    state.resetHour=parseInt($("#resetHourSelect").value,10)||0;
+    const mt=parseFloat($("#manualTargetInput").value); state.manualTarget=(!isNaN(mt)&&mt>0)?Math.min(Math.round(mt),20000):null;
+    selectedIntakeDay=intakeTodayKey();
+    save(); applyCaloriesVisibility(); refresh(); closeSettings(); showToast("تم حفظ الإعدادات");
+  });
+  // target-mode + calculator controls (live)
+  document.querySelectorAll("#targetMode button").forEach(b=>b.addEventListener("click",()=>{
+    state.targetMode=b.dataset.mode; save(); applyTargetMode(); syncIntakeFromCalc();
+  }));
+  $("#manualTargetInput").addEventListener("input",()=>{
+    const mt=parseFloat($("#manualTargetInput").value); state.manualTarget=(!isNaN(mt)&&mt>0)?Math.min(Math.round(mt),20000):null; save(); syncIntakeFromCalc();
+  });
+  $("#heightInput").addEventListener("input",renderCalcPreview);
+  $("#resetAll").addEventListener("click",()=>{ if(confirm("هل تريد مسح جميع البيانات نهائياً؟")){ state=structuredClone(defaultState); save(); selectedDate=todayKey(); refresh(); closeSettings(); showToast("تم مسح البيانات"); } });
+
+  /* ---------- calorie calculator (settings) ---------- */
+  function syncIntakeFromCalc(){ paintIntake(); renderIntakeHistory(); }
+  document.querySelectorAll("#calcSex button").forEach(b=>b.addEventListener("click",()=>{
+    state.sex=b.dataset.sex; save(); renderCalcPreview(); syncIntakeFromCalc();
+  }));
+  $("#calcAge").addEventListener("input",()=>{
+    const a=parseInt($("#calcAge").value,10); state.age=(!isNaN(a)&&a>0)?Math.min(Math.max(a,10),100):null; save(); renderCalcPreview(); syncIntakeFromCalc();
+  });
+  $("#calcActivity").addEventListener("change",()=>{ state.activity=$("#calcActivity").value; save(); renderCalcPreview(); syncIntakeFromCalc(); });
+
+  /* ---------- export / import ---------- */
+  function saveFile(blob, fname, title){
+    try{
+      const file=new File([blob],fname,{type:blob.type});
+      if(navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file],title}).catch(()=>{}); return; }
+    }catch(e){}
+    const url=URL.createObjectURL(blob), a=document.createElement("a"); a.href=url; a.download=fname; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  $("#exportBtn").addEventListener("click",()=>{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+    saveFile(blob, `weight-backup-${todayKey()}.json`, "نسخة احتياطية"); showToast("تم تصدير النسخة");
+  });
+
+  /* ---------- Excel report ---------- */
+  const AR_WEEK=["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+  const ACT_LABEL={"1.2":"خامل","1.375":"خفيف","1.55":"متوسط","1.725":"عالٍ","1.9":"عالٍ جداً"};
+  function f1(n){ return Math.round(n*10)/10; }
+  function sgn(n){ return (n>0?"+":"")+n; }
+  function buildExcel(){
+    const ks=sortedKeys(), h=state.height, vals=ks.map(k=>state.entries[k]);
+    const SEX={male:"ذكر", female:"أنثى"};
+    const cur = vals.length? vals[vals.length-1] : null;
+    const start = vals.length? vals[0] : null;
+    const mult = parseFloat(state.activity||"1.55");
+    const target = getTarget();
+
+    // ---- personal profile (raw input) ----
+    const profile=[
+      ["الاسم", state.name||"—"],
+      ["الطول (سم)", h!=null?h:"—"],
+      ["العمر", state.age!=null?state.age:"—"],
+      ["الجنس", SEX[state.sex]||"—"],
+      ["مستوى النشاط", state.activity? (ACT_LABEL[state.activity]||"—")+" (×"+mult+")" : "—"],
+      ["الوزن المستهدف (كجم)", state.goal!=null?state.goal:"—"],
+      ["طريقة احتساب السعرات", state.targetMode==="manual"?"هدف يدوي":"محسوب تلقائياً (TDEE)"]
+    ];
+    if(state.targetMode==="manual" && state.manualTarget) profile.push(["الهدف اليدوي (سعرة/يوم)", state.manualTarget]);
+
+    // ---- weight summary ----
+    const wsum=[ ["عدد الأيام المسجلة", ks.length] ];
+    if(ks.length){
+      wsum.push(["أول تسجيل", ks[0]+" — "+f1(start)+" كجم"]);
+      wsum.push(["آخر تسجيل", ks[ks.length-1]+" — "+f1(cur)+" كجم"]);
+      wsum.push(["الوزن الحالي (كجم)", f1(cur)]);
+      wsum.push(["متوسط الوزن (كجم)", f1(vals.reduce((a,b)=>a+b,0)/vals.length)]);
+      wsum.push(["أدنى وزن (كجم)", f1(Math.min(...vals))]);
+      wsum.push(["أعلى وزن (كجم)", f1(Math.max(...vals))]);
+      wsum.push(["إجمالي التغيّر (كجم)", sgn(f1(cur-start))]);
+      const spanDays=(fromKey(ks[ks.length-1])-fromKey(ks[0]))/86400000;
+      if(spanDays>0) wsum.push(["متوسط التغيّر الأسبوعي (كجم)", sgn(f1((cur-start)/(spanDays/7)))]);
+      const st=streaks();
+      wsum.push(["السلسلة الحالية (يوم)", st.current]);
+      wsum.push(["أطول سلسلة (يوم)", st.longest]);
+    }
+
+    // ---- health metrics (derived) ----
+    const health=[];
+    if(ks.length && h){
+      const bmi=cur/Math.pow(h/100,2);
+      health.push(["مؤشر كتلة الجسم الحالي", f1(bmi)]);
+      health.push(["التصنيف الصحي", bmiCategory(bmi).name]);
+      health.push(["نطاق الوزن الصحي (كجم)", f1(18.5*Math.pow(h/100,2))+" – "+f1(24.9*Math.pow(h/100,2))]);
+    }
+    if(ks.length && state.goal!=null){
+      health.push(["المتبقّي للهدف (كجم)", sgn(f1(cur-state.goal))]);
+      const totalDist=Math.abs(start-state.goal)||1, done=Math.abs(start-cur);
+      let pct=Math.max(0,Math.min(100,(done/totalDist)*100));
+      if((start>state.goal && cur<=state.goal)||(start<state.goal && cur>=state.goal)) pct=100;
+      health.push(["نسبة التقدّم نحو الهدف", Math.round(pct)+"%"]);
+      if(h){ const gbmi=state.goal/Math.pow(h/100,2); health.push(["مؤشر كتلة الوزن المستهدف", f1(gbmi)+" — "+bmiCategory(gbmi).name]); }
+    }
+
+    // ---- energy / calorie targets (derived from input, Mifflin-St Jeor) ----
+    const energy=[];
+    if(cur!=null && h && state.age){
+      const bmr = 10*cur + 6.25*h - 5*state.age + (state.sex==="female"?-161:5);
+      const tdee = bmr*mult;
+      energy.push(["معدل الأيض الأساسي BMR (سعرة)", Math.round(bmr)]);
+      energy.push(["سعرات المحافظة على الوزن (TDEE)", Math.round(tdee)]);
+      energy.push(["سعرات إنقاص بطيء", Math.round(tdee-250)]);
+      energy.push(["سعرات إنقاص الوزن", Math.round(tdee-500)]);
+      energy.push(["سعرات زيادة الوزن", Math.round(tdee+500)]);
+      energy.push(["البروتين المقترح يومياً (جم)", Math.round(cur*1.6)+" – "+Math.round(cur*2.2)]);
+    }
+    if(target) energy.push(["الهدف اليومي الحالي (سعرة)", target]);
+
+    // ---- calorie statistics ----
+    const iks=Object.keys(state.intake).filter(k=>intakeTotal(k)>0).sort();
+    const ivals=iks.map(k=>intakeTotal(k));
+    const cstat=[];
+    if(iks.length){
+      cstat.push(["أيام مسجّل بها سعرات", iks.length]);
+      cstat.push(["متوسط السعرات اليومية", Math.round(ivals.reduce((a,b)=>a+b,0)/ivals.length)]);
+      cstat.push(["أعلى يوم (سعرة)", Math.max(...ivals)]);
+      cstat.push(["أدنى يوم (سعرة)", Math.min(...ivals)]);
+      if(target){
+        const over=ivals.filter(v=>v>target).length;
+        cstat.push(["أيام ضمن/تحت الهدف", iks.length-over]);
+        cstat.push(["أيام تجاوزت الهدف", over]);
+        cstat.push(["متوسط الفرق عن الهدف", sgn(Math.round(ivals.reduce((a,b)=>a+(b-target),0)/ivals.length))]);
+      }
+    }
+
+    // key/value rows + section helper
+    const kvRows = arr => arr.map(r=>`<tr><td class="k">${r[0]}</td><td class="v" colspan="6">${r[1]}</td></tr>`).join("");
+    const sect = (title, rows) => rows ? `<tr><td class="sect" colspan="7">${title}</td></tr>${rows}` : "";
+
+    // ---- daily weight log ----
+    let prev=null, dataRows="";
+    ks.forEach((k,i)=>{
+      const v=state.entries[k], d=fromKey(k);
+      let ch="", chStyle="";
+      if(prev!=null){ const c=f1(v-prev); ch=sgn(c); chStyle=c>0?"color:#c0392b":(c<0?"color:#147a5c":"color:#888"); }
+      const bmi = h? f1(v/Math.pow(h/100,2)) : "";
+      const cat = h? bmiCategory(v/Math.pow(h/100,2)).name : "";
+      dataRows+=`<tr>
+        <td class="c">${i+1}</td><td>${k}</td><td>${AR_WEEK[d.getDay()]}</td>
+        <td class="n">${f1(v)}</td><td class="n" style="${chStyle}">${ch}</td>
+        <td class="n">${bmi}</td><td>${cat}</td></tr>`;
+      prev=v;
+    });
+    if(!ks.length) dataRows=`<tr><td colspan="7" class="c">لا توجد تسجيلات</td></tr>`;
+
+    // ---- daily calorie log (with per-meal breakdown) ----
+    let intakeRows="";
+    iks.forEach((k,i)=>{
+      const meals=Array.isArray(state.intake[k])?state.intake[k]:[];
+      const v=intakeTotal(k), d=fromKey(k);
+      const diff = target? v-target : "";
+      const diffStyle = target? (v>target?"color:#c0392b":"color:#147a5c") : "";
+      const breakdown = meals.length? meals.join(" + ") : "";
+      intakeRows+=`<tr><td class="c">${i+1}</td><td>${k}</td><td>${AR_WEEK[d.getDay()]}</td>
+        <td class="c">${v}</td><td>${breakdown}</td><td class="c">${target||""}</td>
+        <td class="c" style="${diffStyle}">${diff===""?"":sgn(diff)}</td></tr>`;
+    });
+    const intakeSection = iks.length ? `
+<tr><td class="sect" colspan="7">سجل السعرات اليومي (مرتّب بالتاريخ)</td></tr>
+<tr><th>#</th><th>التاريخ</th><th>اليوم</th><th>السعرات المأكولة</th><th>تفصيل الوجبات</th><th>الهدف اليومي</th><th>الفرق</th></tr>
+${intakeRows}` : "";
+
+    return `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>تقرير الوزن</x:Name>
+<x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<style>
+ table{border-collapse:collapse; font-family:Calibri,'Segoe UI',Arial; font-size:11pt;}
+ td,th{border:1px solid #c9d2e8; padding:6px 12px; mso-number-format:General;}
+ th{background:#1f2a4d; color:#fff; font-weight:bold; text-align:center;}
+ .title{font-size:18pt; font-weight:bold; color:#1f2a4d; border:0; padding:4px 0;}
+ .sub{color:#667; border:0; padding:0 0 10px;}
+ .sect{font-size:13pt; font-weight:bold; color:#1f2a4d; background:#eef2ff; border:0; padding:10px 4px 4px;}
+ .k{background:#f5f7ff; font-weight:bold; width:260px;}
+ .v{width:220px;}
+ .n,.c{mso-number-format:"0.0"; text-align:center;}
+ .c{mso-number-format:"0";}
+</style></head>
+<body><table dir="rtl">
+<tr><td class="title" colspan="7">📊 تقرير متتبع الوزن</td></tr>
+<tr><td class="sub" colspan="7">تاريخ التقرير: ${todayKey()} — كل القيم بالكيلوجرام والترتيب من الأقدم إلى الأحدث</td></tr>
+${sect("الملف الشخصي", kvRows(profile))}
+${sect("ملخّص الوزن", kvRows(wsum))}
+${sect("المؤشرات الصحية", kvRows(health))}
+${sect("مؤشرات الطاقة والسعرات", kvRows(energy))}
+${sect("إحصائيات السعرات", kvRows(cstat))}
+<tr><td class="sect" colspan="7">سجل الأوزان اليومي (مرتّب بالتاريخ)</td></tr>
+<tr><th>#</th><th>التاريخ</th><th>اليوم</th><th>الوزن (كجم)</th><th>التغيّر</th><th>مؤشر الكتلة</th><th>التصنيف</th></tr>
+${dataRows}
+${intakeSection}
+</table></body></html>`;
+  }
+  $("#excelBtn").addEventListener("click",()=>{
+    const blob=new Blob([buildExcel()],{type:"application/vnd.ms-excel"});
+    saveFile(blob, `weight-report-${todayKey()}.xls`, "تقرير الوزن"); showToast("تم تصدير التقرير");
+  });
+  $("#importBtn").addEventListener("click",()=>$("#importFile").click());
+  $("#importFile").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+    r.onload=()=>{ try{
+      const d=JSON.parse(r.result);
+      if(typeof d!=="object"||!d.entries) throw 0;
+      if(!confirm("سيتم دمج البيانات المستوردة مع الحالية. متابعة؟")) return;
+      state.entries=Object.assign({}, state.entries, d.entries);
+      if(d.height) state.height=d.height; if(d.goal) state.goal=d.goal; if(d.name) state.name=d.name;
+      if(d.intake && typeof d.intake==="object") state.intake=Object.assign({}, state.intake, d.intake);
+      if(d.sex) state.sex=d.sex; if(d.age) state.age=d.age; if(d.activity) state.activity=d.activity;
+      if(d.resetHour!=null) state.resetHour=d.resetHour;
+      if(d.targetMode) state.targetMode=d.targetMode; if(d.manualTarget!=null) state.manualTarget=d.manualTarget;
+      normalizeIntake();
+      save(); selectedIntakeDay=intakeTodayKey(); refresh(); showToast("تم استيراد البيانات");
+    }catch(err){ showToast("ملف غير صالح"); } };
+    r.readAsText(f); e.target.value="";
+  });
+
+  /* ---------- toast ---------- */
+  let toastTimer=null;
+  function showToast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),1800); }
+
+  /* ---------- init ---------- */
+  function init(){
+    normalizeIntake();
+    selectedIntakeDay=intakeTodayKey();
+    refresh();
+    applyCaloriesVisibility();
+    const map={ "#calendar":"viewCalendar", "#stats":"viewStats", "#home":"viewHome", "#calories":"viewCalories" };
+    if(map[location.hash] && !(map[location.hash]==="viewCalories" && state.showCalories===false)) activateTab(map[location.hash]);
+    if(state.height==null) setTimeout(openSettings,500);
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ // handle day/month rollover
+      if(selectedDate===todayKey()) renderEditor();
+      if($("#viewCalendar").classList.contains("active")){ calCursor=firstOfMonth(new Date()); renderCalendar(); }
+      if($("#viewCalories").classList.contains("active")){ selectedIntakeDay=intakeTodayKey(); renderIntake(); renderIntakeHistory(); }
+    }});
+  }
+  init();
+
+  if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+})();
+</script>
+</body>
+</html>
